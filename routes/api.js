@@ -3,49 +3,72 @@ var router = express.Router();
 var usersSchema = require('../models/users.model');
 var productSchema = require('../models/product.model');
 var orderSchema = require('../models/order.model');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
-router.put('/approve/:id', async function(req, res, next) {
+const uploadDirectory = path.resolve(__dirname, '../public/images');
+if (!fs.existsSync(uploadDirectory)){
+    fs.mkdirSync(uploadDirectory, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDirectory); 
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({ storage: storage });
+
+router.put('/approve/:id', async function (req, res, next) {
   const id = req.params.id;
   const role = req.role;
 
- if(role === 'admin'){
-  try {
-    let user = await usersSchema.findByIdAndUpdate(id, { isActive: true });
-    if (!user) {
-      return res.status(404).send({
-        status: 404,
-        message: "User not found."
+  if (role === 'admin') {
+    try {
+      let user = await usersSchema.findByIdAndUpdate(id, { isActive: true });
+      if (!user) {
+        return res.status(404).send({
+          status: 404,
+          message: "User not found."
+        });
+      }
+      let useredit = await usersSchema.findById({ _id: id });
+      res.status(200).send({
+        status: 200,
+        message: "Approve Success.",
+        data: useredit
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).send({
+        status: 500,
+        message: "Approve Fail"
       });
     }
-    let useredit = await usersSchema.findById({_id:id});
-    res.status(200).send({
-      status: 200,
-      message: "Approve Success.",
-      data: useredit
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({
-      status: 500,
-      message: "Approve Fail"
+  } else {
+    res.status(403).send({
+      status: 403,
+      message: "Accept Denied"
     });
   }
- }else {
-  res.status(403).send({
-    status: 403,
-    message: "Accept Denied"
-  });
- }
 });
 
 router.get("/product", async function (req, res, next) {
   try {
+    // console.log(req.role);
     const product = await productSchema.find({})
 
     res.status(200).send({
       status: 200,
       message: "Success",
-      data: product
+      data: product,
+      role: req.role
     });
   } catch (error) {
     console.error(error);
@@ -56,52 +79,58 @@ router.get("/product", async function (req, res, next) {
   }
 });
 
-router.post("/product", async function (req, res, next) {
-  let { Pname, 
-        stock, 
-        price} = req.body;
-const role = req.role;
-
- if(role === 'admin'){
-  try {
-    if(Pname || stock || price){
-      let product = new productSchema({
-        Pname: Pname,
-        stock: stock,
-        price: price
-        
-      });
+router.post("/product", upload.single('image'), async function (req, res, next) {
+  let { Pname, stock, price } = req.body;
+  let image = null;
   
-      await product.save();
+  if(req.file){
+    image = req.file.filename; 
+  } else {
+    return res.status(400).send('No file uploaded');
+  }
+  
+  const role = req.role;
+  console.log(image);
+  
+  if (role !== 'admin') {
+    return res.status(403).send({
+      status: 403,
+      message: "Access Denied"
+    });
+  }
 
-      res.status(201).send({
-        status: 201,
-        message: "Create Success.",
-        data: product,
-      });
-    }else{
-      res.status(500).send({
-        status: 500,
-        message: "Create Fail",
+  try {
+    if (!Pname || !stock || !price || !image) {
+      return res.status(400).send({
+        status: 400,
+        message: "Missing required fields"
       });
     }
 
-  } catch (error) {
+    let product = new productSchema({
+      Pname: Pname,
+      stock: stock,
+      price: price,
+      Image: image
+    });
 
-    res.status(500).send({
+    await product.save();
+
+    return res.status(201).send({
+      status: 201,
+      message: "Product created successfully",
+      data: product,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({
       status: 500,
-      message: "Create Fail",
+      message: "Internal Server Error"
     });
   }
-}else{
-  res.status(403).send({
-    status: 403,
-    message: "Accept Denied"
-  });
-}
 });
 
-router.put('/product/:id', async function(req, res, next) {
+router.put('/product/:id', async function (req, res, next) {
   const id = req.params.id;
   const role = req.role;
 
@@ -117,12 +146,12 @@ router.put('/product/:id', async function(req, res, next) {
           message: "Product not found."
         });
       }
-      if(stock <= 0){
+      if (stock <= 0) {
         product.stock = stock
-      }else{
-        product.stock += stock; 
+      } else {
+        product.stock += stock;
       }
-      
+
       product.Pname = Pname
       product.price = price
 
@@ -147,14 +176,14 @@ router.put('/product/:id', async function(req, res, next) {
   }
 });
 
-router.delete('/product/:id', async function(req, res, next) {
+router.delete('/product/:id', async function (req, res, next) {
   const id = req.params.id;
-  const role = req.role; 
+  const role = req.role;
   if (role === 'admin') {
     try {
 
       let product = await productSchema.findByIdAndDelete(id);
-      
+
       if (!product) {
         return res.status(404).send({
           status: 404,
@@ -206,8 +235,8 @@ router.post("/products/:id/orders", async function (req, res, next) {
           let addorder = await order.save();
 
           if (addorder) {
-            let stock = product.stock - Amount; 
-            let updatedProduct = await productSchema.findByIdAndUpdate(Pid, { stock: stock }); 
+            let stock = product.stock - Amount;
+            let updatedProduct = await productSchema.findByIdAndUpdate(Pid, { stock: stock });
             res.status(201).send({
               status: 201,
               message: "Create Success.",
@@ -263,7 +292,7 @@ router.get("/orders", async function (req, res, next) {
 router.get("/products/:id/orders", async function (req, res, next) {
   const Pid = req.params.id;
   try {
-    const order = await orderSchema.find({productId:Pid});
+    const order = await orderSchema.find({ productId: Pid });
 
     res.status(200).send({
       status: 200,
@@ -277,6 +306,10 @@ router.get("/products/:id/orders", async function (req, res, next) {
       message: "Internal Server Error",
     });
   }
-}); 
+});
+
+
+
+
 
 module.exports = router;

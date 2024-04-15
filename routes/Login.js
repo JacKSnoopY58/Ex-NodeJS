@@ -7,12 +7,13 @@ router.post("/", async function (req, res, next) {
     let { username, password } = req.body;
 
     let logincheck = await Login(username, password);
- 
+    
     if (logincheck.success) {
         res.status(200).send({
           status: 200,
           message: "Login Successful",
-          token: logincheck.token
+          token: logincheck.token,
+          role: logincheck.role
         });
       } else {
         

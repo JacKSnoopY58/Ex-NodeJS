@@ -12,7 +12,7 @@ async function Login(username, password) {
         if (user.isActive) {
           
           const token = jwt.sign({ id: user._id, username: user.username, role: user.role }, process.env.SECRETTKEY, { expiresIn: '30m', algorithm: 'HS256' }, );
-          return { success: true, token: token }; 
+          return { success: true, token: token, role: user.role }; 
         } else {
           
           return { success:false };

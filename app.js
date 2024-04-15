@@ -30,7 +30,7 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/api/v1/login', LoginRouter);
 app.use('/api/v1/register', RegisterRouter);
-app.use('/api/v1', apiRouter);
+app.use('/api/v1',Auth, apiRouter);
 
 
 
