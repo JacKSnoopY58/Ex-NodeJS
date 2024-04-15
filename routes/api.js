@@ -3,6 +3,8 @@ var router = express.Router();
 var usersSchema = require('../models/users.model');
 var productSchema = require('../models/product.model');
 var orderSchema = require('../models/order.model');
+var cartitemsSchema = require('../models/cartitem.model');
+// var cartsSchema = require('../models/cart.model');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -90,7 +92,7 @@ router.post("/product", upload.single('image'), async function (req, res, next) 
   }
   
   const role = req.role;
-  console.log(image);
+  // console.log(image);
   
   if (role !== 'admin') {
     return res.status(403).send({
@@ -130,14 +132,18 @@ router.post("/product", upload.single('image'), async function (req, res, next) 
   }
 });
 
-router.put('/product/:id', async function (req, res, next) {
+router.put('/product/:id', upload.single('image'), async function (req, res, next) {
   const id = req.params.id;
   const role = req.role;
-
+  let image = null;
   let { Pname, stock, price } = req.body;
 
-  if (role === 'admin') {
-    try {
+  try {
+    if (req.file) {
+      image = req.file.filename; 
+    }
+
+    if (role === 'admin') {
       let product = await productSchema.findById(id);
 
       if (!product) {
@@ -146,14 +152,20 @@ router.put('/product/:id', async function (req, res, next) {
           message: "Product not found."
         });
       }
-      if (stock <= 0) {
-        product.stock = stock
-      } else {
-        product.stock += stock;
+
+
+      if (req.file) {
+        fs.unlinkSync(path.join(uploadDirectory, product.Image)); 
       }
 
-      product.Pname = Pname
-      product.price = price
+      if (image === null) {
+        image = product.Image;
+      }
+
+      product.stock = stock;
+      product.Image = image;
+      product.Pname = Pname;
+      product.price = price;
 
       await product.save();
 
@@ -162,16 +174,17 @@ router.put('/product/:id', async function (req, res, next) {
         message: "Edit Product Success.",
         data: product
       });
-    } catch (error) {
-      res.status(500).send({
-        status: 500,
-        message: "Internal Server Error."
+    } else {
+      res.status(403).send({
+        status: 403,
+        message: "Access Denied."
       });
     }
-  } else {
-    res.status(403).send({
-      status: 403,
-      message: "Access Denied."
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      status: 500,
+      message: "Internal Server Error."
     });
   }
 });
@@ -308,8 +321,144 @@ router.get("/products/:id/orders", async function (req, res, next) {
   }
 });
 
+router.post("/product/confirmorder", async function (req, res, next) {
+  const uid = req.uid;
+  const username = req.username; 
+  try {
+ 
+    const cart = await cartitemsSchema.find({ OrderId: null });
+
+    let total = 0;
+    for (const item of cart) {
+      total += item.Ptotal;
+    }
+
+    let ids = [];
+    for (const item of cart) {
+      ids.push(item._id);
+    }
+
+    const order = new orderSchema({
+      userId: uid,
+      total: total,
+      status: 'paid'
+    });
+
+    await order.save();
+
+    await cartitemsSchema.updateMany({ OrderId: null }, { OrderId: order._id });
+
+    res.status(200).send({
+      status: 200,
+      message: "Order confirmed successfully",
+      data: order
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      status: 500,
+      message: "Internal Server Error",
+    });
+  }
+});
 
 
+router.get("/products/carts", async function (req, res, next) {
+  try {
+    const cart = await cartitemsSchema.find({ OrderId: null });
+    res.status(200).send({
+      status: 200,
+      message: "Success",
+      data: cart
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      status: 500,
+      message: "Internal Server Error",
+    });
+  }
+}); 
 
+router.delete('/product/carts/:id', async function (req, res, next) {
+  const id = req.params.id;
+  // const role = req.role;
+  // if (role === 'admin') {
+    try {
+
+      // let product = await productSchema.findByIdAndDelete(id);
+      let cart = await cartitemsSchema.findByIdAndDelete(id)
+      if (!cart) {
+        return res.status(404).send({
+          status: 404,
+          message: "Cart not found."
+        });
+      }
+
+      res.status(200).send({
+        status: 200,
+        message: "Delete Cart Success."
+      });
+    } catch (error) {
+      res.status(500).send({
+        status: 500,
+        message: "Delete Cart Failed."
+      });
+    }
+  // } else {
+  //   res.status(403).send({
+  //     status: 403,
+  //     message: "Access Denied"
+  //   });
+  // }
+});
+
+
+router.post("/product/addcart", async function (req, res, next) {
+  const { productId, Amount } = req.body;
+
+  try {
+ 
+    if (!productId || !Amount || Amount <= 0) {
+      return res.status(400).send({
+        status: 400,
+        message: "Invalid product ID or amount",
+      });
+    }
+
+
+    const product = await productSchema.findById(productId);
+
+    if (!product) {
+      return res.status(404).send({
+        status: 404,
+        message: "Product not found",
+      });
+    }
+
+    const cart = new cartitemsSchema({
+      productId: productId,
+      Amount: Amount,
+      Pname: product.Pname,
+      Pimg: product.Image,
+      price: product.price,
+      Ptotal: product.price * Amount
+    });
+
+    await cart.save();
+
+    res.status(200).send({
+      status: 200,
+      message: "Product added to cart successfully",
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      status: 500,
+      message: "Internal Server Error",
+    });
+  }
+});
 
 module.exports = router;
