@@ -382,12 +382,34 @@ router.get("/products/carts", async function (req, res, next) {
 
 router.delete('/product/carts/:id', async function (req, res, next) {
   const id = req.params.id;
-  // const role = req.role;
-  // if (role === 'admin') {
+  const role = req.role;
+  let cart;
+  
     try {
+      let cartitem = await cartitemsSchema.findById(id);
+      
+      if (!cartitem) {
+        return res.status(404).send({
+          status: 404,
+          message: "Cart item not found."
+        });
+      }
 
-      // let product = await productSchema.findByIdAndDelete(id);
-      let cart = await cartitemsSchema.findByIdAndDelete(id)
+      let product = await productSchema.findById(cartitem.productId);
+      
+      if (!product) {
+        return res.status(404).send({
+          status: 404,
+          message: "Product not found."
+        });
+      }
+
+      let stock = product.stock + cartitem.Amount;
+      product.stock = stock;
+      await product.save();
+
+      cart = await cartitemsSchema.findByIdAndDelete(id);
+      
       if (!cart) {
         return res.status(404).send({
           status: 404,
@@ -395,37 +417,31 @@ router.delete('/product/carts/:id', async function (req, res, next) {
         });
       }
 
-      res.status(200).send({
+      return res.status(200).send({
         status: 200,
         message: "Delete Cart Success."
       });
     } catch (error) {
-      res.status(500).send({
+      return res.status(500).send({
         status: 500,
         message: "Delete Cart Failed."
       });
     }
-  // } else {
-  //   res.status(403).send({
-  //     status: 403,
-  //     message: "Access Denied"
-  //   });
-  // }
-});
 
+});
 
 router.post("/product/addcart", async function (req, res, next) {
   const { productId, Amount } = req.body;
+  console.log(productId);
+  console.log(Amount)
 
   try {
- 
     if (!productId || !Amount || Amount <= 0) {
       return res.status(400).send({
         status: 400,
         message: "Invalid product ID or amount",
       });
     }
-
 
     const product = await productSchema.findById(productId);
 
@@ -436,25 +452,36 @@ router.post("/product/addcart", async function (req, res, next) {
       });
     }
 
-    const cart = new cartitemsSchema({
-      productId: productId,
-      Amount: Amount,
-      Pname: product.Pname,
-      Pimg: product.Image,
-      price: product.price,
-      Ptotal: product.price * Amount
-    });
+    let stock = product.stock - Amount;
 
-    await cart.save();
+    if (stock >= 0) {
+      let updatedProduct = await productSchema.findByIdAndUpdate(productId, { stock: stock });
 
-    res.status(200).send({
-      status: 200,
-      message: "Product added to cart successfully",
-    });
+      const cart = new cartitemsSchema({
+        productId: productId,
+        Amount: Amount,
+        Pname: product.Pname,
+        Pimg: product.Image,
+        price: product.price,
+        Ptotal: product.price * Amount
+      });
 
+      await cart.save();
+
+      return res.status(200).send({
+        status: 200,
+        message: "Product added to cart successfully",
+      });
+    } else {
+      return res.status(500).send({
+        status: 500,
+        message: "OUT OF STOCK",
+        data: "Available Stock: " + product.stock,
+      });
+    }
   } catch (error) {
     console.error(error);
-    res.status(500).send({
+    return res.status(500).send({
       status: 500,
       message: "Internal Server Error",
     });
