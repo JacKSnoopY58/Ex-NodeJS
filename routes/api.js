@@ -9,6 +9,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+
 const uploadDirectory = path.resolve(__dirname, '../public/images');
 if (!fs.existsSync(uploadDirectory)){
     fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -324,8 +325,9 @@ router.get("/products/:id/orders", async function (req, res, next) {
 router.post("/product/confirmorder", async function (req, res, next) {
   const uid = req.uid;
   const username = req.username; 
+
   try {
- 
+
     const cart = await cartitemsSchema.find({ OrderId: null });
 
     let total = 0;
@@ -333,17 +335,12 @@ router.post("/product/confirmorder", async function (req, res, next) {
       total += item.Ptotal;
     }
 
-    let ids = [];
-    for (const item of cart) {
-      ids.push(item._id);
-    }
-
     const order = new orderSchema({
       userId: uid,
       total: total,
-      status: 'paid'
+      status: 'paid',
+      // timeStamp: new Date() 
     });
-
     await order.save();
 
     await cartitemsSchema.updateMany({ OrderId: null }, { OrderId: order._id });
@@ -361,6 +358,7 @@ router.post("/product/confirmorder", async function (req, res, next) {
     });
   }
 });
+
 
 
 router.get("/products/carts", async function (req, res, next) {
@@ -429,6 +427,43 @@ router.delete('/product/carts/:id', async function (req, res, next) {
     }
 
 });
+
+router.delete("/deletecart", async function (req, res, next) {
+  try {
+    const cart = await cartitemsSchema.find({ OrderId: null });
+    console.log(cart)
+    if (cart.length > 0) {
+      console.log(cart);
+      for (const item of cart) {
+        const cartItem = await cartitemsSchema.findById(item._id);
+        console.log("Cart: " + cartItem);
+        const product = await productSchema.findById(cartItem.productId);
+        product.stock += cartItem.Amount;
+        console.log("Stock: " + product.stock);
+        await product.save();
+        await cartitemsSchema.findByIdAndDelete(item._id);
+      }
+
+      return res.status(200).send({
+        status: 200,
+        message: "Cancel Success",
+      });
+    } else {
+      return res.status(404).send({
+        status: 404,
+        message: "Cart is empty or not found",
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({
+      status: 500,
+      message: "Internal Server Error",
+    });
+  }
+});
+
+
 
 router.post("/product/addcart", async function (req, res, next) {
   const { productId, Amount } = req.body;
