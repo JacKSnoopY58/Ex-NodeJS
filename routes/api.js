@@ -63,7 +63,6 @@ router.put('/approve/:id', async function (req, res, next) {
 });
 
 router.put('/user/edit', upload.single('image'), async function (req, res, next) {
-  
   const id = req.uid;
 
   let image = null;
@@ -74,39 +73,37 @@ router.put('/user/edit', upload.single('image'), async function (req, res, next)
       image = req.file.filename; 
     }
 
-    
-      let User = await usersSchema.findById(id);
+    let User = await usersSchema.findById(id);
 
-      if (!User) {
-        return res.status(404).send({
-          status: 404,
-          message: "User not found."
-        });
-      }
-
-
-      if (req.file) {
-        fs.unlinkSync(path.join(uploadDirectory, User.Image)); 
-      }
-
-      if (image === null) {
-        image = User.Image;
-      }
-
-      User.fullname = fullname;
-      User.dateBirth = datebirth;
-      User.password = password;
-      User.email = email;
-      User.address = address;
-      User.Image = Image;
-      
-      await User.save();
-      res.status(200).send({
-        status: 200,
-        message: "Edit User ID: "+ id +" Success.",
-        data: product
+    if (!User) {
+      return res.status(404).send({
+        status: 404,
+        message: "User not found."
       });
-   
+    }
+
+    if (req.file && User.Image) {
+      fs.unlinkSync(path.join(uploadDirectory, User.Image)); 
+    }
+
+    if (image === null) {
+      image = User.Image;
+    }
+
+    User.fullname = fullname;
+    User.dateBirth = datebirth;
+    User.password = password;
+    User.email = email;
+    User.address = address;
+    User.Image = image;
+    
+    await User.save();
+    res.status(200).send({
+      status: 200,
+      message: "Edit User ID: " + id + " Success.",
+      data: User
+    });
+
   } catch (error) {
     console.error(error);
     res.status(500).send({
