@@ -8,7 +8,11 @@ const Role = Object.freeze({
 const usersSchema = new mongoose.Schema({
     username: { type: String, unique: true },
     password: { type: String },
-    name: { type: String },
+    fullname: { type: String},
+    address: { type: String},
+    email: { type: String },
+    dateBirth: {type: Date},
+    Image: { type: String},
     role: { type: String, enum: Object.values(Role) },
     isActive: { type: Boolean, default: false }
 }, {
