@@ -113,25 +113,7 @@ router.put('/user/edit', upload.single('image'), async function (req, res, next)
   }
 });
 
-router.get("/product", async function (req, res, next) {
-  try {
-    // console.log(req.role);
-    const product = await productSchema.find({})
 
-    res.status(200).send({
-      status: 200,
-      message: "Success",
-      data: product,
-      role: req.role
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({
-      status: 500,
-      message: "Internal Server Error",
-    });
-  }
-});
 
 router.post("/product", upload.single('image'), async function (req, res, next) {
   let { Pname, stock, price } = req.body;
@@ -177,6 +159,9 @@ router.post("/product", upload.single('image'), async function (req, res, next) 
     });
   } catch (error) {
     console.error(error);
+    if (req.fil && req.file.filename){
+      fs.unlinkSync(path.join(uploadDirectory, req.file.filename)); 
+    }
     return res.status(500).send({
       status: 500,
       message: "Internal Server Error"
